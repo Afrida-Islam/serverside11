@@ -162,8 +162,7 @@ async function run() {
               description: scholarshipInfo.description,
               images: [scholarshipInfo.image],
             },
-            // FIX: Corrected typo 'scholarshipInfoo' -> 'scholarshipInfo'
-            // NOTE: price is multiplied by 100 to convert to cents
+            
             unit_amount: scholarshipInfo.price * 100, 
           },
           quantity: scholarshipInfo.quantity || 1,
@@ -179,7 +178,7 @@ async function run() {
       cancel_url: `http://localhost:5173/scholarshipdetails/${scholarshipInfo.versityId}`,
     });
 
-    // 🛑 Only send ONE response on success
+ 
     res.json({ url: session.url });
 
   } catch (error) {
@@ -187,6 +186,54 @@ async function run() {
     res.status(500).json({ error: "Failed to create Stripe checkout session." });
   }
 });
+
+
+ app.post('/payment-success', async (req, res) => {
+      const { sessionId } = req.body
+      const session = await stripe.checkout.sessions.retrieve(sessionId)
+      const plant = await plantsCollection.findOne({
+        _id: new ObjectId(session.metadata.plantId),
+      })
+      const order = await ordersCollection.findOne({
+        transactionId: session.payment_intent,
+      })
+
+      if (session.status === 'complete' && plant && !order) {
+        // save order data in db
+        const orderInfo = {
+          plantId: session.metadata.plantId,
+          transactionId: session.payment_intent,
+          customer: session.metadata.customer,
+          status: 'pending',
+          seller: plant.seller,
+          name: plant.name,
+          category: plant.category,
+          quantity: 1,
+          price: session.amount_total / 100,
+          image: plant?.image,
+        }
+        const result = await ordersCollection.insertOne(orderInfo)
+        // update plant quantity
+        await plantsCollection.updateOne(
+          {
+            _id: new ObjectId(session.metadata.plantId),
+          },
+          { $inc: { quantity: -1 } }
+        )
+
+        return res.send({
+          transactionId: session.payment_intent,
+          orderId: result.insertedId,
+        })
+      }
+      res.send(
+        res.send({
+          transactionId: session.payment_intent,
+          orderId: order._id,
+        })
+      )
+    })
+
 
     await client.db("admin").command({ ping: 1 });
     console.log(
