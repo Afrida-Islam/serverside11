@@ -22,16 +22,12 @@ try {
   console.error(
     "FIREBASE INITIALIZATION ERROR: Check FB_SERVICE_KEY environment variable."
   );
- 
 }
-// ------------------------------------
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-// ---------------------------------------------
-
 
 const verifyJWT = async (req, res, next) => {
   const token = req?.headers?.authorization?.split(" ")[1];
@@ -44,16 +40,13 @@ const verifyJWT = async (req, res, next) => {
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     req.tokenEmail = decoded.email;
-    // console.log("Decoded JWT:", decoded); // Log decoded payload
     next();
   } catch (err) {
-   
     return res
       .status(401)
       .send({ message: "Unauthorized Access! Invalid token.", err });
   }
 };
-
 
 app.get("/", (req, res) => {
   res.send("Hello Ritu World!");
@@ -78,6 +71,7 @@ async function run() {
     const db = client.db("university-db");
     const universityCollection = db.collection("universities");
     const userCollection = db.collection("users");
+    const applicationCollection = db.collection("applications");
     app.post("/user", verifyJWT, async (req, res) => {
       const userData = req.body;
       const userEmail = req.tokenEmail;
@@ -142,98 +136,119 @@ async function run() {
       res.send(result);
     });
 
-  app.post("/create-checkout-session", async (req, res) => {
-  try {
-    const scholarshipInfo = req.body;
-    
-    // Ensure essential data is present
-    if (!scholarshipInfo?.price || !scholarshipInfo?.versityId) {
-      return res.status(400).json({ error: "Missing required details (price or versityId)." });
-    }
+    app.post("/create-checkout-session", async (req, res) => {
+      try {
+        const scholarshipInfo = req.body;
 
-    // 🛑 Use the initialized 'stripe' object to create the session
-    const session = await stripe.checkout.sessions.create({
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: scholarshipInfo.name,
-              description: scholarshipInfo.description,
-              images: [scholarshipInfo.image],
+        // Ensure essential data is present
+        if (!scholarshipInfo?.price || !scholarshipInfo?.versityId) {
+          return res
+            .status(400)
+            .json({ error: "Missing required details (price or versityId)." });
+        }
+
+        // 🛑 Use the initialized 'stripe' object to create the session
+        const session = await stripe.checkout.sessions.create({
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: scholarshipInfo.name,
+                  description: scholarshipInfo.description,
+                  images: [scholarshipInfo.image],
+                },
+                // FIX: Corrected typo 'scholarshipInfoo' -> 'scholarshipInfo'
+                // NOTE: price is multiplied by 100 to convert to cents
+                unit_amount: scholarshipInfo.price * 100,
+              },
+              quantity: scholarshipInfo.quantity || 1,
             },
-            
-            unit_amount: scholarshipInfo.price * 100, 
+          ],
+          customer_email: scholarshipInfo?.student?.email,
+          mode: "payment",
+          metadata: {
+            versityId: scholarshipInfo.versityId,
+            studentEmail: scholarshipInfo?.student.email,
           },
-          quantity: scholarshipInfo.quantity || 1,
-        },
-      ],
-      customer_email: scholarshipInfo?.student?.email,
-      mode: "payment",
-      metadata: {
-        versityId: scholarshipInfo.versityId,
-        studentEmail: scholarshipInfo?.student.email,
-      },
-      success_url: `http://localhost:5173/PaymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `http://localhost:5173/scholarshipdetails/${scholarshipInfo.versityId}`,
+          success_url: `http://localhost:5173/PaymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `http://localhost:5173/scholarshipdetails/${scholarshipInfo.versityId}`,
+        });
+
+        res.json({ url: session.url });
+      } catch (error) {
+        console.error("Stripe Session Creation Error:", error);
+        res
+          .status(500)
+          .json({ error: "Failed to create Stripe checkout session." });
+      }
     });
 
- 
-    res.json({ url: session.url });
-
-  } catch (error) {
-    console.error("Stripe Session Creation Error:", error);
-    res.status(500).json({ error: "Failed to create Stripe checkout session." });
-  }
-});
-
-
- app.post('/payment-success', async (req, res) => {
-      const { sessionId } = req.body
-      const session = await stripe.checkout.sessions.retrieve(sessionId)
-      const plant = await plantsCollection.findOne({
-        _id: new ObjectId(session.metadata.plantId),
-      })
-      const order = await ordersCollection.findOne({
-        transactionId: session.payment_intent,
-      })
-
-      if (session.status === 'complete' && plant && !order) {
-        // save order data in db
-        const orderInfo = {
-          plantId: session.metadata.plantId,
-          transactionId: session.payment_intent,
-          customer: session.metadata.customer,
-          status: 'pending',
-          seller: plant.seller,
-          name: plant.name,
-          category: plant.category,
-          quantity: 1,
-          price: session.amount_total / 100,
-          image: plant?.image,
-        }
-        const result = await ordersCollection.insertOne(orderInfo)
-        // update plant quantity
-        await plantsCollection.updateOne(
-          {
-            _id: new ObjectId(session.metadata.plantId),
-          },
-          { $inc: { quantity: -1 } }
-        )
-
-        return res.send({
-          transactionId: session.payment_intent,
-          orderId: result.insertedId,
-        })
+    app.post("/payment-success", async (req, res) => {
+      const { sessionId } = req.body;
+      if (!sessionId) {
+        return res.status(400).send({ message: "Missing Stripe Session ID." });
       }
-      res.send(
-        res.send({
-          transactionId: session.payment_intent,
-          orderId: order._id,
-        })
-      )
-    })
 
+      try {
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        const versityId = session.metadata.versityId;
+        const studentEmail = session.metadata.studentEmail;
+        const scholarship = await universityCollection.findOne({
+          _id: new ObjectId(versityId),
+        });
+        const application = await applicationCollection.findOne({
+          transactionId: session.payment_intent,
+        });
+        if (session.status === "complete" && scholarship && !application) {
+          const applicationInfo = {
+            versityId: versityId,
+            transactionId: session.payment_intent,
+            studentEmail: studentEmail,
+            status: "paid",
+            universityName: scholarship.universityName,
+            scholarshipName: scholarship.scholarshipName,
+            category: scholarship.subjectCategory,
+            amountPaid: session.amount_total / 100,
+            paymentDate: new Date(),
+          };
+          const result = await applicationCollection.insertOne(applicationInfo);
+          await universityCollection.updateOne(
+            { _id: new ObjectId(versityId) },
+            { $inc: { availableSlots: -1 } }
+          );
+
+          return res.json({
+            message: "Payment and application recorded successfully.",
+            transactionId: session.payment_intent,
+            applicationId: result.insertedId,
+            scholarshipName: scholarship.scholarshipName,
+            universityName: scholarship.universityName,
+            amountPaid: applicationInfo.amountPaid,
+          });
+        } else if (application) {
+          return res.json({
+            message: "Application already recorded.",
+            transactionId: session.payment_intent,
+            applicationId: application._id,
+            scholarshipName: scholarship?.scholarshipName || "N/A",
+            universityName: scholarship?.universityName || "N/A",
+            amountPaid: application.amountPaid || session.amount_total / 100,
+          });
+        } else {
+          return res.status(400).json({
+            message:
+              "Payment session not complete or scholarship data is missing.",
+            status: session.status,
+          });
+        }
+      } catch (error) {
+        console.error("Payment Success Error:", error);
+        return res.status(500).json({
+          message: "Internal server error during payment fulfillment.",
+        });
+      }
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
