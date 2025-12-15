@@ -3,7 +3,8 @@ const express = require("express");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
 const admin = require("firebase-admin");
-const { default: Stripe } = require("stripe");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+// const { default: Stripe } = require("stripe");
 const port = process.env.PORT || 3000;
 const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
   "utf-8"
@@ -141,36 +142,51 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/create-checkout-session", async (req, res) => {
-      const scholarshipInfo = req.body;
-      console.log(scholarshipInfo);
-     res.send(scholarshipInfo)
-      const session = await stripe.checkout.sessions.create({
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: scholarshipInfo?.name,
-                description: scholarshipInfo?.description,
-                images: [scholarshipInfo.image],
-              },
-              unit_amount: scholarshipInfoo?.price * 100,
+  app.post("/create-checkout-session", async (req, res) => {
+  try {
+    const scholarshipInfo = req.body;
+    
+    // Ensure essential data is present
+    if (!scholarshipInfo?.price || !scholarshipInfo?.versityId) {
+      return res.status(400).json({ error: "Missing required details (price or versityId)." });
+    }
+
+    // 🛑 Use the initialized 'stripe' object to create the session
+    const session = await stripe.checkout.sessions.create({
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: scholarshipInfo.name,
+              description: scholarshipInfo.description,
+              images: [scholarshipInfo.image],
             },
-            quantity: scholarshipInfo?.quantity,
+            // FIX: Corrected typo 'scholarshipInfoo' -> 'scholarshipInfo'
+            // NOTE: price is multiplied by 100 to convert to cents
+            unit_amount: scholarshipInfo.price * 100, 
           },
-        ],
-        student_email: scholarshipInfo?.student?.email,
-        mode: "payment",
-        metadata: {
-          versityId: scholarshipInfo?.versityId,
-          student: scholarshipInfo?.student.email,
+          quantity: scholarshipInfo.quantity || 1,
         },
-        success_url: `http://localhost:5173/PaymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `http://localhost:5173/scholarshipdetails/${scholarshipInfo?.versityId}`,
-      });
-      res.send({ url: session.url });
+      ],
+      customer_email: scholarshipInfo?.student?.email,
+      mode: "payment",
+      metadata: {
+        versityId: scholarshipInfo.versityId,
+        studentEmail: scholarshipInfo?.student.email,
+      },
+      success_url: `http://localhost:5173/PaymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `http://localhost:5173/scholarshipdetails/${scholarshipInfo.versityId}`,
     });
+
+    // 🛑 Only send ONE response on success
+    res.json({ url: session.url });
+
+  } catch (error) {
+    console.error("Stripe Session Creation Error:", error);
+    res.status(500).json({ error: "Failed to create Stripe checkout session." });
+  }
+});
 
     await client.db("admin").command({ ping: 1 });
     console.log(
