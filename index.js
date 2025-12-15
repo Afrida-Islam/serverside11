@@ -246,8 +246,8 @@ async function run() {
       }
     });
     app.get("/my-applications", verifyJWT, async (req, res) => {
-      const result = await ordersCollection
-        .find({ customer: req.tokenEmail })
+      const result = await applicationCollection
+        .find({ studentEmail: req.tokenEmail })
         .toArray();
       res.send(result);
     });
