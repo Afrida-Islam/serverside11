@@ -146,8 +146,6 @@ async function run() {
             .status(400)
             .json({ error: "Missing required details (price or versityId)." });
         }
-
-        // 🛑 Use the initialized 'stripe' object to create the session
         const session = await stripe.checkout.sessions.create({
           line_items: [
             {
@@ -158,8 +156,6 @@ async function run() {
                   description: scholarshipInfo.description,
                   images: [scholarshipInfo.image],
                 },
-                // FIX: Corrected typo 'scholarshipInfoo' -> 'scholarshipInfo'
-                // NOTE: price is multiplied by 100 to convert to cents
                 unit_amount: scholarshipInfo.price * 100,
               },
               quantity: scholarshipInfo.quantity || 1,
@@ -249,7 +245,12 @@ async function run() {
         });
       }
     });
-
+    app.get("/my-applications", verifyJWT, async (req, res) => {
+      const result = await ordersCollection
+        .find({ customer: req.tokenEmail })
+        .toArray();
+      res.send(result);
+    });
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
