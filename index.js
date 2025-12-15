@@ -21,7 +21,7 @@ try {
   console.error(
     "FIREBASE INITIALIZATION ERROR: Check FB_SERVICE_KEY environment variable."
   );
-  // If running without Firebase, comment out the try/catch block above and the JWT middleware below
+ 
 }
 // ------------------------------------
 
@@ -31,7 +31,7 @@ app.use(cors());
 app.use(express.json());
 // ---------------------------------------------
 
-// --- 3. JWT Middleware ---
+
 const verifyJWT = async (req, res, next) => {
   const token = req?.headers?.authorization?.split(" ")[1];
 
@@ -46,13 +46,13 @@ const verifyJWT = async (req, res, next) => {
     // console.log("Decoded JWT:", decoded); // Log decoded payload
     next();
   } catch (err) {
-    // console.log("JWT Verification Error:", err);
+   
     return res
       .status(401)
       .send({ message: "Unauthorized Access! Invalid token.", err });
   }
 };
-// ----------------------------
+
 
 app.get("/", (req, res) => {
   res.send("Hello Ritu World!");
@@ -142,34 +142,34 @@ async function run() {
     });
 
     app.post("/create-checkout-session", async (req, res) => {
-      const paymentInfo = req.body;
-      console.log(paymentInfo);
-     res.send(paymentInfo)
-      // const session = await stripe.checkout.sessions.create({
-      //   line_items: [
-      //     {
-      //       price_data: {
-      //         currency: "usd",
-      //         product_data: {
-      //           name: paymentInfo?.name,
-      //           description: paymentInfo?.description,
-      //           images: [paymentInfo.image],
-      //         },
-      //         unit_amount: paymentInfo?.price * 100,
-      //       },
-      //       quantity: paymentInfo?.quantity,
-      //     },
-      //   ],
-      //   customer_email: paymentInfo?.customer?.email,
-      //   mode: "payment",
-      //   metadata: {
-      //     plantId: paymentInfo?.plantId,
-      //     customer: paymentInfo?.customer.email,
-      //   },
-      //   success_url: `${process.env.CLIENT_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      //   cancel_url: `${process.env.CLIENT_DOMAIN}/plant/${paymentInfo?.plantId}`,
-      // });
-      // res.send({ url: session.url });
+      const scholarshipInfo = req.body;
+      console.log(scholarshipInfo);
+     res.send(scholarshipInfo)
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: scholarshipInfo?.name,
+                description: scholarshipInfo?.description,
+                images: [scholarshipInfo.image],
+              },
+              unit_amount: scholarshipInfoo?.price * 100,
+            },
+            quantity: scholarshipInfo?.quantity,
+          },
+        ],
+        student_email: scholarshipInfo?.student?.email,
+        mode: "payment",
+        metadata: {
+          versityId: scholarshipInfo?.versityId,
+          student: scholarshipInfo?.student.email,
+        },
+        success_url: `http://localhost:5173/PaymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `http://localhost:5173/scholarshipdetails/${scholarshipInfo?.versityId}`,
+      });
+      res.send({ url: session.url });
     });
 
     await client.db("admin").command({ ping: 1 });
