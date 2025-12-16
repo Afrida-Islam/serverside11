@@ -26,7 +26,15 @@ try {
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = ["http://localhost:5173"];
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 const verifyJWT = async (req, res, next) => {
@@ -245,12 +253,14 @@ async function run() {
         });
       }
     });
+
     app.get("/my-applications", verifyJWT, async (req, res) => {
-      const result = await applicationCollection
-        .find({ studentEmail: req.tokenEmail })
-        .toArray();
+      const result = await applicationCollection.find().toArray();
+
+      console.log("my_appli: " + req.tokenEmail);
       res.send(result);
     });
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
