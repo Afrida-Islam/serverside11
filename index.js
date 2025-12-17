@@ -265,8 +265,15 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/user/role", verifyJWT, async (req, res) => {
-      const result = await usersCollection.findOne({ email: req.tokenEmail });
+    app.get("/user/role/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      if (req.decoded.email !== email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+
+      const query = { email: email };
+      const result = await usersCollection.findOne(query);
+
       res.send({ role: result?.role });
     });
     await client.db("admin").command({ ping: 1 });
