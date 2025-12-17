@@ -145,6 +145,28 @@ async function run() {
       const result = await userCollection.deleteOne(query);
       res.send(result);
     });
+
+    app.get("/admin-stats", verifyJWT, async (req, res) => {
+      const users = await userCollection.estimatedDocumentCount();
+      const scholarships = await scholarshipCollection.estimatedDocumentCount();
+
+      // উদাহরণস্বরূপ: মোট অ্যাপ্লিকেশন ফি গণনা (যদি আপনার পেমেন্ট হিস্ট্রি থাকে)
+      const payments = await paymentCollection.find().toArray();
+      const totalFees = payments.reduce(
+        (sum, payment) => sum + payment.amount,
+        0
+      );
+
+      // চার্টের জন্য ডাটা (ক্যাটাগরি অনুযায়ী স্কলারশিপ সংখ্যা)
+      const chartData = await scholarshipCollection
+        .aggregate([
+          { $group: { _id: "$scholarshipCategory", count: { $sum: 1 } } },
+        ])
+        .toArray();
+
+      res.send({ users, scholarships, totalFees, chartData });
+    });
+
     app.get("/scholarship", async (req, res) => {
       const result = await universityCollection.find().toArray();
       res.send(result);
