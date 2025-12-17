@@ -128,7 +128,6 @@ async function run() {
       res.send(result);
     });
 
-    // ২. ইউজারের রোল আপডেট করা
     app.patch("/users/role/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const { role } = req.body;
@@ -137,14 +136,6 @@ async function run() {
         $set: { role: role },
       };
       const result = await userCollection.updateOne(filter, updateDoc);
-      res.send(result);
-    });
-
-    // ৩. ইউজার ডিলিট করা
-    app.delete("/users/:id", verifyJWT, async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await userCollection.deleteOne(query);
       res.send(result);
     });
 
