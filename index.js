@@ -137,6 +137,12 @@ async function run() {
       }
     });
 
+    app.delete("/scholarship/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await universityCollection.deleteOne(query);
+      res.send(result);
+    });
     app.post("/create-scholarship", async (req, res) => {
       const versityData = req.body;
       console.log(versityData);
@@ -265,17 +271,12 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/user/role/:email", verifyJWT, async (req, res) => {
+    app.get("/user/role/:email", async (req, res) => {
       const email = req.params.email;
-      if (req.decoded.email !== email) {
-        return res.status(403).send({ message: "Forbidden Access" });
-      }
-
-      const query = { email: email };
-      const result = await usersCollection.findOne(query);
-
+      const result = await userCollection.findOne({ email });
       res.send({ role: result?.role });
     });
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
