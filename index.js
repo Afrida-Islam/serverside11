@@ -80,6 +80,8 @@ async function run() {
     const universityCollection = db.collection("universities");
     const userCollection = db.collection("users");
     const applicationCollection = db.collection("applications");
+    const scholarshipCollection = universityCollection;
+    const paymentCollection = applicationCollection;
     app.post("/user", verifyJWT, async (req, res) => {
       const userData = req.body;
       const userEmail = req.tokenEmail;
@@ -147,24 +149,33 @@ async function run() {
     });
 
     app.get("/admin-stats", verifyJWT, async (req, res) => {
-      const users = await userCollection.estimatedDocumentCount();
-      const scholarships = await scholarshipCollection.estimatedDocumentCount();
+      try {
+        const users = await userCollection.estimatedDocumentCount();
+        const scholarships =
+          await scholarshipCollection.estimatedDocumentCount();
+        const payments = await paymentCollection.find().toArray();
+        const totalFees = payments.reduce(
+          (sum, payment) => sum + (payment.price || 0),
+          0
+        );
+        const chartData = await scholarshipCollection
+          .aggregate([
+            {
+              $group: {
+                _id: "$scholarshipCategory", // আপনার ডাটাবেসে ফিল্ডের নাম চেক করুন
+                count: { $sum: 1 },
+              },
+            },
+          ])
+          .toArray();
 
-      // উদাহরণস্বরূপ: মোট অ্যাপ্লিকেশন ফি গণনা (যদি আপনার পেমেন্ট হিস্ট্রি থাকে)
-      const payments = await paymentCollection.find().toArray();
-      const totalFees = payments.reduce(
-        (sum, payment) => sum + payment.amount,
-        0
-      );
-
-      // চার্টের জন্য ডাটা (ক্যাটাগরি অনুযায়ী স্কলারশিপ সংখ্যা)
-      const chartData = await scholarshipCollection
-        .aggregate([
-          { $group: { _id: "$scholarshipCategory", count: { $sum: 1 } } },
-        ])
-        .toArray();
-
-      res.send({ users, scholarships, totalFees, chartData });
+        res.send({ users, scholarships, totalFees, chartData });
+      } catch (error) {
+        console.error("Analytics Error:", error);
+        res
+          .status(500)
+          .send({ message: "Internal Server Error", error: error.message });
+      }
     });
 
     app.get("/scholarship", async (req, res) => {
@@ -324,6 +335,38 @@ async function run() {
       const email = req.params.email;
       const result = await userCollection.findOne({ email });
       res.send({ role: result?.role });
+    });
+
+    // ১. ইমেইল অনুযায়ী রিভিউ পাওয়া
+    app.get("/my-reviews/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      const query = { reviewerEmail: email };
+      const result = await reviewCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // ২. রিভিউ আপডেট করা
+    app.patch("/reviews/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const updatedReview = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          comment: updatedReview.comment,
+          rating: updatedReview.rating,
+          date: new Date(),
+        },
+      };
+      const result = await reviewCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+
+    // ৩. রিভিউ ডিলিট করা
+    app.delete("/reviews/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await reviewCollection.deleteOne(query);
+      res.send(result);
     });
 
     await client.db("admin").command({ ping: 1 });
