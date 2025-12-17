@@ -212,6 +212,10 @@ async function run() {
             status: "paid",
             universityName: scholarship.universityName,
             scholarshipName: scholarship.scholarshipName,
+            universityImage: scholarship.universityImage, // or scholarship.image
+            universityCity: scholarship.universityCity, // matches your database key
+            universityCountry: scholarship.universityCountry,
+
             category: scholarship.subjectCategory,
             amountPaid: session.amount_total / 100,
             paymentDate: new Date(),
