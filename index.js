@@ -118,6 +118,36 @@ async function run() {
       }
     });
 
+    app.get("/users", verifyJWT, async (req, res) => {
+      const role = req.query.role;
+      let query = {};
+      if (role && role !== "All") {
+        query = { role: role };
+      }
+      const result = await userCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // ২. ইউজারের রোল আপডেট করা
+    app.patch("/users/role/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const { role } = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: { role: role },
+      };
+      const result = await userCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+
+    // ৩. ইউজার ডিলিট করা
+    app.delete("/users/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await userCollection.deleteOne(query);
+      res.send(result);
+    });
+
     app.get("/scholarship", async (req, res) => {
       const result = await universityCollection.find().toArray();
       res.send(result);
