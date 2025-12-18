@@ -25,16 +25,14 @@ try {
 }
 
 const app = express();
+const corsOptions = {
+  origin: ["http://localhost:5173", "https://assignment011-dkra.vercel.app/"],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
 
-const allowedOrigins = ["https://assignment011-dkra.vercel.app"];
-
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-  })
-);
-
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const verifyJWT = async (req, res, next) => {
@@ -257,72 +255,10 @@ async function run() {
     });
 
     app.post("/payment-success", async (req, res) => {
-      const { sessionId } = req.body;
-      if (!sessionId) {
-        return res.status(400).send({ message: "Missing Stripe Session ID." });
-      }
-
       try {
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
-        const versityId = session.metadata.versityId;
-        const studentEmail = session.metadata.studentEmail;
-        const scholarship = await universityCollection.findOne({
-          _id: new ObjectId(versityId),
-        });
-        const application = await applicationCollection.findOne({
-          transactionId: session.payment_intent,
-        });
-        if (session.status === "complete" && scholarship && !application) {
-          const applicationInfo = {
-            versityId: versityId,
-            transactionId: session.payment_intent,
-            studentEmail: studentEmail,
-            status: "paid",
-            universityName: scholarship.universityName,
-            scholarshipName: scholarship.scholarshipName,
-            universityImage: scholarship.universityImage,
-            universityCity: scholarship.universityCity,
-            universityCountry: scholarship.universityCountry,
-
-            category: scholarship.subjectCategory,
-            amountPaid: session.amount_total / 100,
-            paymentDate: new Date(),
-          };
-          const result = await applicationCollection.insertOne(applicationInfo);
-          await universityCollection.updateOne(
-            { _id: new ObjectId(versityId) },
-            { $inc: { availableSlots: -1 } }
-          );
-
-          return res.json({
-            message: "Payment and application recorded successfully.",
-            transactionId: session.payment_intent,
-            applicationId: result.insertedId,
-            scholarshipName: scholarship.scholarshipName,
-            universityName: scholarship.universityName,
-            amountPaid: applicationInfo.amountPaid,
-          });
-        } else if (application) {
-          return res.json({
-            message: "Application already recorded.",
-            transactionId: session.payment_intent,
-            applicationId: application._id,
-            scholarshipName: scholarship?.scholarshipName || "N/A",
-            universityName: scholarship?.universityName || "N/A",
-            amountPaid: application.amountPaid || session.amount_total / 100,
-          });
-        } else {
-          return res.status(400).json({
-            message:
-              "Payment session not complete or scholarship data is missing.",
-            status: session.status,
-          });
-        }
+        res.status(200).send({ message: "Payment confirmed!" });
       } catch (error) {
-        console.error("Payment Success Error:", error);
-        return res.status(500).json({
-          message: "Internal server error during payment fulfillment.",
-        });
+        res.status(500).send({ error: error.message });
       }
     });
 
