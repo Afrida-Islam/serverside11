@@ -60,8 +60,10 @@ app.get("/", (req, res) => {
   res.send("Hello Ritu World!");
 });
 
-// --- 4. MongoDB Setup ---
-const client = new MongoClient(process.env.MONGODB_URI, {
+// --- MongoDB Setup ---
+const uri = `mongodb+srv://Ritu27:0P4Zey56E8itZ0zV@cluster0.5ylkwje.mongodb.net/university-db?retryWrites=true&w=majority&appName=Cluster0`;
+
+const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
@@ -178,8 +180,14 @@ async function run() {
     });
 
     app.get("/scholarship", async (req, res) => {
-      const result = await universityCollection.find().toArray();
-      res.send(result);
+      try {
+        const result = await universityCollection.find().toArray();
+        console.log("Documents found in DB:", result.length); // এটি চেক করুন
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching scholarship:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
     });
 
     app.get("/scholarship/:id", async (req, res) => {
@@ -240,8 +248,8 @@ async function run() {
             versityId: scholarshipInfo.versityId,
             studentEmail: scholarshipInfo?.student.email,
           },
-          success_url: `http://localhost:5173/PaymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `http://localhost:5173/scholarshipdetails/${scholarshipInfo.versityId}`,
+          success_url: `https://assignment011-dkra.vercel.app/PaymentSuccess?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `https://assignment011-dkra.vercel.app/scholarshipdetails/${scholarshipInfo.versityId}`,
         });
 
         res.json({ url: session.url });
