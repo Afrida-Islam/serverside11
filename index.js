@@ -26,7 +26,7 @@ try {
 
 const app = express();
 
-const allowedOrigins = ["http://localhost:5173"];
+const allowedOrigins = ["https://assignment011-dkra.vercel.app"];
 
 app.use(
   cors({
@@ -80,10 +80,12 @@ async function run() {
     const universityCollection = db.collection("universities");
     const userCollection = db.collection("users");
     const applicationCollection = db.collection("applications");
+    const reviewCollection = db.collection("reviews");
     const scholarshipCollection = universityCollection;
     const paymentCollection = applicationCollection;
     app.post("/user", verifyJWT, async (req, res) => {
       const userData = req.body;
+
       const userEmail = req.tokenEmail;
 
       const filter = { email: userEmail };
@@ -91,7 +93,7 @@ async function run() {
       const updateDoc = {
         $set: {
           name: userData.name,
-          photoURL: userData.photoURL,
+          photoURL: userData.image,
           lastLogin: new Date(),
         },
         $setOnInsert: {
@@ -278,8 +280,8 @@ async function run() {
             status: "paid",
             universityName: scholarship.universityName,
             scholarshipName: scholarship.scholarshipName,
-            universityImage: scholarship.universityImage, // or scholarship.image
-            universityCity: scholarship.universityCity, // matches your database key
+            universityImage: scholarship.universityImage,
+            universityCity: scholarship.universityCity,
             universityCountry: scholarship.universityCountry,
 
             category: scholarship.subjectCategory,
@@ -324,10 +326,36 @@ async function run() {
       }
     });
 
-    app.get("/my-applications", verifyJWT, async (req, res) => {
-      const result = await applicationCollection.find().toArray();
+    app.get("/my-applications/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      const query = { studentEmail: email };
 
-      console.log("my_appli: " + req.tokenEmail);
+      try {
+        const result = await applicationCollection.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Error fetching applications", error });
+      }
+    });
+
+    app.get("/all-applications", verifyJWT, async (req, res) => {
+      const result = await applicationCollection.find().toArray();
+      res.send(result);
+    });
+
+    // স্ট্যাটাস এবং ফিডব্যাক আপডেট করার রুট
+    app.patch("/applications/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const { status, feedback } = req.body;
+      const filter = { _id: new ObjectId(id) };
+
+      const updateDoc = {
+        $set: {},
+      };
+      if (status) updateDoc.$set.status = status;
+      if (feedback) updateDoc.$set.feedback = feedback;
+
+      const result = await applicationCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
 
@@ -336,36 +364,49 @@ async function run() {
       const result = await userCollection.findOne({ email });
       res.send({ role: result?.role });
     });
+    // ১. রিভিউ যোগ করা
+    app.post("/reviews", verifyJWT, async (req, res) => {
+      const review = req.body;
+      if (review.scholarshipId)
+        review.scholarshipId = new ObjectId(review.scholarshipId);
+      const result = await reviewCollection.insertOne(review);
+      res.send(result);
+    });
 
-    // ১. ইমেইল অনুযায়ী রিভিউ পাওয়া
+    // ২. নির্দিষ্ট ইউজারের রিভিউ পাওয়া
     app.get("/my-reviews/:email", verifyJWT, async (req, res) => {
-      const email = req.params.email;
-      const query = { reviewerEmail: email };
+      const query = { userEmail: req.params.email };
       const result = await reviewCollection.find(query).toArray();
       res.send(result);
     });
 
-    // ২. রিভিউ আপডেট করা
-    app.patch("/reviews/:id", verifyJWT, async (req, res) => {
-      const id = req.params.id;
-      const updatedReview = req.body;
-      const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: {
-          comment: updatedReview.comment,
-          rating: updatedReview.rating,
-          date: new Date(),
-        },
-      };
-      const result = await reviewCollection.updateOne(filter, updateDoc);
+    // ৩. সব রিভিউ পাওয়া (মডারেশন)
+    app.get("/all-reviews", verifyJWT, async (req, res) => {
+      const result = await reviewCollection.find().toArray();
       res.send(result);
     });
 
-    // ৩. রিভিউ ডিলিট করা
+    // ৪. রিভিউ আপডেট করা
+    app.patch("/reviews/:id", verifyJWT, async (req, res) => {
+      const { reviewComment, ratingPoint } = req.body;
+      const result = await reviewCollection.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        {
+          $set: {
+            reviewComment,
+            ratingPoint: parseInt(ratingPoint),
+            reviewDate: new Date().toISOString(),
+          },
+        }
+      );
+      res.send(result);
+    });
+
+    // ৫. রিভিউ ডিলিট করা
     app.delete("/reviews/:id", verifyJWT, async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await reviewCollection.deleteOne(query);
+      const result = await reviewCollection.deleteOne({
+        _id: new ObjectId(req.params.id),
+      });
       res.send(result);
     });
 
