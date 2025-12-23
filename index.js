@@ -34,11 +34,10 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // লোকালহোস্ট বা নির্দিষ্ট অরিজিন চেক করা
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.log("Blocked by CORS:", origin); // এটি লগ করলে বুঝতে পারবেন কোন অরিজিন ব্লক হচ্ছে
+        console.log("Blocked by CORS:", origin);
         callback(new Error("Not allowed by CORS"));
       }
     },
@@ -72,7 +71,7 @@ app.get("/", (req, res) => {
 });
 
 // --- MongoDB Setup ---
-const uri = `mongodb+srv://Ritu27:0P4Zey56E8itZ0zV@cluster0.5ylkwje.mongodb.net/university-db?retryWrites=true&w=majority&appName=Cluster0`;
+const uri = process.env.MONGODB_URL;
 
 const client = new MongoClient(uri, {
   serverApi: {
