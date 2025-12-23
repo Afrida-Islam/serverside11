@@ -4,57 +4,90 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
 const admin = require("firebase-admin");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-// const { default: Stripe } = require("stripe");
-const port = process.env.PORT || 3000;
-const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
-  "utf-8"
-);
 
+const app = express();
+const port = process.env.PORT || 3000;
+
+// --- Firebase Initialization ---
 try {
   const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
     "utf-8"
   );
   const serviceAccount = JSON.parse(decoded);
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  }
 } catch (error) {
-  console.error(
-    "FIREBASE INITIALIZATION ERROR: Check FB_SERVICE_KEY environment variable."
-  );
+  console.error("FIREBASE INITIALIZATION ERROR:", error.message);
 }
 
-const app = express();
-
+// --- Middleware ---
 const allowedOrigins = [
-  // "http://localhost:5173",
   "https://assignment011-dkra.vercel.app",
+  "http://localhost:5173",
 ];
-
 app.use(
   cors({
     origin: function (origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.log("Blocked by CORS:", origin);
         callback(new Error("Not allowed by CORS"));
       }
     },
     credentials: true,
   })
 );
-
 app.use(express.json());
 
+// --- MongoDB Setup ---
+const uri = process.env.MONGODB_URL;
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
+});
+
+let universityCollection,
+  userCollection,
+  applicationCollection,
+  reviewCollection;
+
+// This function connects to the DB if not already connected
+async function connectDB() {
+  if (universityCollection) return;
+  await client.connect();
+  const db = client.db("university-db");
+  universityCollection = db.collection("universities");
+  userCollection = db.collection("users");
+  applicationCollection = db.collection("applications");
+  reviewCollection = db.collection("reviews");
+  console.log("Connected to MongoDB");
+}
+
+// Middleware to ensure DB connection is ready before any route runs
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    res
+      .status(500)
+      .send({ message: "Database Connection Error", error: error.message });
+  }
+});
+
+// --- Auth Middleware ---
 const verifyJWT = async (req, res, next) => {
   const token = req?.headers?.authorization?.split(" ")[1];
-
   if (!token)
     return res
       .status(401)
       .send({ message: "Unauthorized Access! Token missing." });
-
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     req.tokenEmail = decoded.email;
@@ -69,41 +102,6 @@ const verifyJWT = async (req, res, next) => {
 app.get("/", (req, res) => {
   res.send("Hello Ritu World!");
 });
-
-// --- MongoDB Setup ---
-const uri = process.env.MONGODB_URL;
-
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
-});
-
-let universityCollection,
-  userCollection,
-  applicationCollection,
-  reviewCollection;
-
-async function run() {
-  try {
-    // Connect the client once
-    await client.connect();
-    const db = client.db("university-db");
-
-    // Initialize collection variables
-    universityCollection = db.collection("universities");
-    userCollection = db.collection("users");
-    applicationCollection = db.collection("applications");
-    reviewCollection = db.collection("reviews");
-
-    console.log("Connected to MongoDB!");
-  } catch (err) {
-    console.error("MongoDB Connection Error:", err);
-  }
-}
-run().catch(console.dir);
 
 app.post("/user", verifyJWT, async (req, res) => {
   const userData = req.body;
@@ -433,6 +431,6 @@ app.delete("/reviews/:id", verifyJWT, async (req, res) => {
 
 module.exports = app;
 
-app.listen(port, () => {
-  console.log(`Express app listening on port ${port}`);
-});
+if (process.env.NODE_ENV !== "production") {
+  app.listen(port, () => console.log(`Server running on ${port}`));
+}
