@@ -27,21 +27,20 @@ try {
 const app = express();
 
 const allowedOrigins = [
-  "http://localhost:5173/",
+  // "http://localhost:5173",
   "https://assignment011-dkra.vercel.app",
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg =
-          "The CORS policy for this site does not allow access from the specified Origin.";
-        return callback(new Error(msg), false);
+      // লোকালহোস্ট বা নির্দিষ্ট অরিজিন চেক করা
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.log("Blocked by CORS:", origin); // এটি লগ করলে বুঝতে পারবেন কোন অরিজিন ব্লক হচ্ছে
+        callback(new Error("Not allowed by CORS"));
       }
-      return callback(null, true);
     },
     credentials: true,
   })
