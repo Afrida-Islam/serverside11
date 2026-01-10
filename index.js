@@ -170,27 +170,71 @@ app.delete("/users/:id", verifyJWT, async (req, res) => {
   res.send(result);
 });
 
+// app.get("/admin-stats", verifyJWT, async (req, res) => {
+//   try {
+//     const users = await userCollection.estimatedDocumentCount();
+//     const scholarships = await scholarshipCollection.estimatedDocumentCount();
+//     const payments = await paymentCollection.find().toArray();
+//     const totalFees = payments.reduce(
+//       (sum, payment) => sum + (payment.price || 0),
+//       0
+//     );
+//     const chartData = await scholarshipCollection
+//       .aggregate([
+//         {
+//           $group: {
+//             _id: "$scholarshipCategory",
+//             count: { $sum: 1 },
+//           },
+//         },
+//       ])
+//       .toArray();
+
+//     res.send({ users, scholarships, totalFees, chartData });
+//   } catch (error) {
+//     console.error("Analytics Error:", error);
+//     res
+//       .status(500)
+//       .send({ message: "Internal Server Error", error: error.message });
+//   }
+// });
 app.get("/admin-stats", verifyJWT, async (req, res) => {
   try {
     const users = await userCollection.estimatedDocumentCount();
-    const scholarships = await scholarshipCollection.estimatedDocumentCount();
-    const payments = await paymentCollection.find().toArray();
-    const totalFees = payments.reduce(
-      (sum, payment) => sum + (payment.price || 0),
+
+    const scholarships = await universityCollection.estimatedDocumentCount();
+    const totalApplications =
+      await applicationCollection.estimatedDocumentCount();
+    const applications = await applicationCollection.find().toArray();
+    const totalFees = applications.reduce(
+      (sum, app) => sum + (parseFloat(app.amountPaid) || 0),
       0
     );
-    const chartData = await scholarshipCollection
+    const chartData = await applicationCollection
       .aggregate([
         {
           $group: {
-            _id: "$scholarshipCategory", // আপনার ডাটাবেসে ফিল্ডের নাম চেক করুন
+            _id: "$category",
             count: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            name: "$_id",
+            count: 1,
+            _id: 0,
           },
         },
       ])
       .toArray();
 
-    res.send({ users, scholarships, totalFees, chartData });
+    res.send({
+      users,
+      scholarships,
+      totalApplications,
+      totalFees,
+      chartData,
+    });
   } catch (error) {
     console.error("Analytics Error:", error);
     res
@@ -198,7 +242,6 @@ app.get("/admin-stats", verifyJWT, async (req, res) => {
       .send({ message: "Internal Server Error", error: error.message });
   }
 });
-
 app.get("/scholarship", async (req, res) => {
   try {
     const result = await universityCollection.find().toArray();
