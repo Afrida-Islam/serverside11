@@ -201,26 +201,30 @@ app.delete("/users/:id", verifyJWT, async (req, res) => {
 app.get("/admin-stats", verifyJWT, async (req, res) => {
   try {
     const users = await userCollection.estimatedDocumentCount();
-
+    // এখানে scholarships ফিল্ডের নাম ফ্রন্টএন্ডের সাথে মিল রাখা হয়েছে
     const scholarships = await universityCollection.estimatedDocumentCount();
     const totalApplications =
       await applicationCollection.estimatedDocumentCount();
+
     const applications = await applicationCollection.find().toArray();
     const totalFees = applications.reduce(
       (sum, app) => sum + (parseFloat(app.amountPaid) || 0),
       0
     );
+
+    // চার্ট ডাটা জেনারেশন
     const chartData = await applicationCollection
       .aggregate([
         {
           $group: {
+            // নিশ্চিত করুন আপনার applicationCollection-এ 'category' নামে ফিল্ড আছে
             _id: "$category",
             count: { $sum: 1 },
           },
         },
         {
           $project: {
-            name: "$_id",
+            name: { $ifNull: ["$_id", "Unknown"] }, // যদি ক্যাটাগরি না থাকে তবে Unknown দেখাবে
             count: 1,
             _id: 0,
           },
@@ -230,7 +234,7 @@ app.get("/admin-stats", verifyJWT, async (req, res) => {
 
     res.send({
       users,
-      scholarships,
+      scholarships, // এটি ফ্রন্টএন্ডের stats.scholarships এর সাথে মিলবে
       totalApplications,
       totalFees,
       chartData,
