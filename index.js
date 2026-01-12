@@ -66,6 +66,7 @@ async function connectDB() {
   userCollection = db.collection("users");
   applicationCollection = db.collection("applications");
   reviewCollection = db.collection("reviews");
+  // যদি পেমেন্ট আলাদা থাকে তবে সেটিও যোগ করুন
   console.log("Connected to MongoDB");
 }
 
@@ -199,6 +200,7 @@ app.delete("/users/:id", verifyJWT, async (req, res) => {
 //   }
 // });
 app.get("/admin-stats", verifyJWT, async (req, res) => {
+  console.log("Request received for stats from:", req.tokenEmail);
   try {
     const users = await userCollection.estimatedDocumentCount();
     const scholarships = await universityCollection.estimatedDocumentCount();
