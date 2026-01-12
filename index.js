@@ -202,30 +202,28 @@ app.get("/admin-stats", verifyJWT, async (req, res) => {
   try {
     const users = await userCollection.estimatedDocumentCount();
     const scholarships = await universityCollection.estimatedDocumentCount();
-    const totalApplications =
-      await applicationCollection.estimatedDocumentCount();
+    const totalApplications = await applicationCollection.estimatedDocumentCount();
 
+    // মোট রেভিনিউ ক্যালকুলেশন
     const applications = await applicationCollection.find().toArray();
-
-    // Revenue calculation
     const totalFees = applications.reduce(
       (sum, app) => sum + (parseFloat(app.amountPaid) || 0),
       0
     );
 
-    // Chart ডাটা জেনারেশন (এগ্রিগেশন)
+    // চার্ট ডাটা: সাবজেক্ট ক্যাটাগরি অনুযায়ী অ্যাপ্লিকেশন সংখ্যা
     const chartData = await applicationCollection
       .aggregate([
         {
           $group: {
-            // এখানে check করুন আপনার DB-তে 'category' নাকি 'subjectCategory' নামে ডাটা আছে
-            _id: "$category",
+            // অ্যাপ্লিকেশনে রাখা 'category' ফিল্ড অনুযায়ী গ্রুপিং
+            _id: "$category", 
             count: { $sum: 1 },
           },
         },
         {
           $project: {
-            name: { $ifNull: ["$_id", "Other"] }, // যদি ক্যাটাগরি না থাকে তবে Other দেখাবে
+            name: { $ifNull: ["$_id", "Unknown"] },
             count: 1,
             _id: 0,
           },
@@ -233,7 +231,6 @@ app.get("/admin-stats", verifyJWT, async (req, res) => {
       ])
       .toArray();
 
-    // ফ্রন্টএন্ডে পাঠানোর সময় নিশ্চিত করুন সব ডাটা যাচ্ছে
     res.send({
       users,
       scholarships,
